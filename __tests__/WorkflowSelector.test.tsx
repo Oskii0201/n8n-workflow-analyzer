@@ -25,15 +25,15 @@ describe('WorkflowSelector', () => {
   it('renders with placeholder when no workflow is selected', () => {
     render(<WorkflowSelector {...defaultProps} />);
     
-    expect(screen.getByText('Wybierz workflow...')).toBeInTheDocument();
+    expect(screen.getByText('Select workflow...')).toBeInTheDocument();
   });
 
   it('displays all workflows in dropdown', () => {
     render(<WorkflowSelector {...defaultProps} />);
     
-    expect(screen.getByText('Workflow 1 (5 node\'ów) 🟢')).toBeInTheDocument();
-    expect(screen.getByText('Workflow 2 (3 node\'ów) 🔴')).toBeInTheDocument();
-    expect(screen.getByText('Workflow 3 (7 node\'ów) 🔴')).toBeInTheDocument();
+    expect(screen.getByText("Workflow 1 (5 nodes) 🟢")).toBeInTheDocument();
+    expect(screen.getByText("Workflow 2 (3 nodes) 🔴")).toBeInTheDocument();
+    expect(screen.getByText("Workflow 3 (7 nodes) 🔴")).toBeInTheDocument();
   });
 
   it('shows selected workflow', () => {
@@ -79,26 +79,26 @@ describe('WorkflowSelector', () => {
   it('shows empty state when no workflows are available', () => {
     render(<WorkflowSelector {...defaultProps} workflows={[]} />);
     
-    expect(screen.getByText('Brak dostępnych workflow')).toBeInTheDocument();
+    expect(screen.getByText('No workflows available')).toBeInTheDocument();
   });
 
   it('does not show empty state when loading', () => {
     render(<WorkflowSelector {...defaultProps} workflows={[]} loading={true} />);
     
-    expect(screen.queryByText('Brak dostępnych workflow')).not.toBeInTheDocument();
+    expect(screen.queryByText('No workflows available')).not.toBeInTheDocument();
   });
 
   it('shows active workflow indicator', () => {
     render(<WorkflowSelector {...defaultProps} />);
     
-    const activeOption = screen.getByText('Workflow 1 (5 node\'ów) 🟢');
+    const activeOption = screen.getByText('Workflow 1 (5 nodes) 🟢');
     expect(activeOption).toBeInTheDocument();
   });
 
   it('shows inactive workflow indicator', () => {
     render(<WorkflowSelector {...defaultProps} />);
     
-    const inactiveOption = screen.getByText('Workflow 2 (3 node\'ów) 🔴');
+    const inactiveOption = screen.getByText('Workflow 2 (3 nodes) 🔴');
     expect(inactiveOption).toBeInTheDocument();
   });
 

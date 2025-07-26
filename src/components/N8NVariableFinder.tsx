@@ -39,7 +39,7 @@ interface ApiResponse<T> {
 }
 
 const N8NVariableFinder: React.FC = () => {
-    const { sessions, activeSessionId, setSessionConnected } = useConnection();
+    const { sessions, activeSessionId } = useConnection();
     const [showSessionManager, setShowSessionManager] = useState(false);
     const [workflows, setWorkflows] = useState<Workflow[]>([]);
     const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
@@ -219,7 +219,7 @@ const N8NVariableFinder: React.FC = () => {
                         <Eye className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-4" />
                         <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
                         <p className="text-gray-500 break-words">
-                            No variable <span className="font-mono bg-gray-100 px-2 py-1 rounded">"{searchTerm}"</span> found in the selected workflow
+                            No variable <span className="font-mono bg-gray-100 px-2 py-1 rounded">&quot;{searchTerm}&quot;</span> found in the selected workflow
                         </p>
                         <div className="mt-4 text-sm text-gray-400">
                             Check if the variable name is correct and if the workflow contains the expected nodes

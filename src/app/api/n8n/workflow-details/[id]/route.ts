@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = params;
+        const { id } = await params;
         const { apiKey, baseUrl } = await request.json();
 
         if (!apiKey || !baseUrl || !id) {
             return NextResponse.json(
-                { success: false, error: 'API Key, Base URL i ID workflow są wymagane' },
+                { success: false, error: 'API Key, Base URL and Workflow ID are required' },
                 { status: 400 }
             );
         }
@@ -46,7 +46,6 @@ export async function POST(
         const workflowResponse = await response.json();
         const workflow = workflowResponse.data;
 
-        // Przygotuj strukturę do analizy dependencies
         const analysisData = {
             id: workflow.id,
             name: workflow.name,

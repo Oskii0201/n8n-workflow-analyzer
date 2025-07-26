@@ -68,16 +68,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ searchTerm, onChange, onSearch, l
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {EXAMPLES.map((ex, i) => (
+          {EXAMPLES.map((example) => (
             <button
-              key={ex.label}
-              type="button"
-              className="bg-gradient-to-r from-gray-50 to-indigo-50 rounded-lg p-3 border border-blue-200 flex flex-col items-start hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-              onClick={() => handleExampleClick(ex.pattern)}
-              tabIndex={0}
+              key={example.label}
+              onClick={() => handleExampleClick(example.pattern)}
+              className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
             >
-              <div className="flex items-center mb-2">{ex.icon}<span className="font-medium text-gray-700 text-sm">{ex.label}</span></div>
-              <code className="block text-blue-600 text-xs font-mono">{ex.pattern}</code>
+              {example.icon}
+              <div>
+                <div className="font-medium text-gray-900">{example.label}</div>
+                <div className="text-sm text-gray-600 font-mono">{example.pattern}</div>
+              </div>
             </button>
           ))}
         </div>

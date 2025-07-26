@@ -7,9 +7,8 @@ import { useConnection } from '../contexts/ConnectionContext';
 import SessionManagerModal from './SessionManagerModal';
 
 const navLinks = [
-  { href: '/', label: 'Main' },
-  { href: '/workflows', label: 'Workflow' },
-  { href: '/settings', label: 'Settings' },
+  { href: '/', label: 'Home' },
+  { href: '/workflows', label: 'Variable Finder' },
 ];
 
 const Navbar: React.FC = () => {

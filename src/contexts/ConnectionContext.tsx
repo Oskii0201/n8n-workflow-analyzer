@@ -76,7 +76,7 @@ export const ConnectionProvider = ({ children }: { children: ReactNode }) => {
                 };
               }
             });
-          } catch (error) {
+          } catch {
             sessionsWithData = encryptedSessions.map(s => ({
               ...s,
               apiKey: '***encrypted***',

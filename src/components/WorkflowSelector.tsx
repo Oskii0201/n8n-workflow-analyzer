@@ -21,7 +21,7 @@ const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({ workflows, selected
   <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
     <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
       <span className="bg-blue-100 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">1</span>
-      Wybierz Workflow
+      Select workflow
     </h2>
     <div className="flex items-center space-x-4">
       <select
@@ -32,10 +32,10 @@ const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({ workflows, selected
         }}
         className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
       >
-        <option value="">Wybierz workflow...</option>
+        <option value="">Select workflow...</option>
         {workflows.map(workflow => (
           <option key={workflow.id} value={workflow.id}>
-            {workflow.name} ({workflow.nodes} node'ów) {workflow.active ? '🟢' : '🔴'}
+            {workflow.name} ({workflow.nodes} nodes) {workflow.active ? '🟢' : '🔴'}
           </option>
         ))}
       </select>
@@ -43,13 +43,13 @@ const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({ workflows, selected
         onClick={onRefresh}
         disabled={loading}
         className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center"
-        title="Odśwież listę workflow"
+        title="Refresh workflow list"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
       </button>
     </div>
     {workflows.length === 0 && !loading && (
-      <p className="mt-3 text-sm text-gray-500">Brak dostępnych workflow</p>
+      <p className="mt-3 text-sm text-gray-500">No workflows available</p>
     )}
   </section>
 );
