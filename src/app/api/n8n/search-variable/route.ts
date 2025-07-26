@@ -82,7 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     }
 
     const workflowResponse = await response.json();
-    const workflow: WorkflowData = workflowResponse.data;
+    const workflow: WorkflowData = workflowResponse.data || workflowResponse;
 
     if (!workflow || !workflow.nodes) {
       return NextResponse.json({
