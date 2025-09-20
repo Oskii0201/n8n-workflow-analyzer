@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Copy, ChevronDown, ChevronRight, Package, Search } from 'lucide-react';
+import { Download, Copy, ChevronDown, ChevronRight, Package, Search, Code } from 'lucide-react';
 
 interface Match {
   field: string;
@@ -27,6 +27,30 @@ const ResultsList: React.FC<ResultsListProps> = ({ searchResults, onCopy, onExpo
 
   const toggleNode = (nodeId: string) => {
     setExpandedNode(prev => (prev === nodeId ? null : nodeId));
+  };
+
+  const isCodeNode = (nodeType: string) => {
+    return nodeType === 'n8n-nodes-base.code' ||
+           nodeType === 'n8n-nodes-base.function' ||
+           nodeType === 'n8n-nodes-base.functionItem';
+  };
+
+  const isJavaScriptMatch = (match: Match) => {
+    return match.context.includes('Code Node') && match.context.includes('Line');
+  };
+
+  const formatCodeSnippet = (expression: string, isJsCode: boolean) => {
+    if (!isJsCode || expression.length < 100) {
+      return expression;
+    }
+
+    // For long code, show only the relevant lines
+    const lines = expression.split('\n');
+    if (lines.length <= 5) {
+      return expression;
+    }
+
+    return lines.slice(0, 3).join('\n') + '\n... (' + (lines.length - 3) + ' more lines)';
   };
 
   const totalMatches = searchResults.reduce((acc, result) => acc + result.matches.length, 0);
@@ -62,8 +86,16 @@ const ResultsList: React.FC<ResultsListProps> = ({ searchResults, onCopy, onExpo
               <div className="p-4 cursor-pointer" onClick={() => toggleNode(result.nodeId)}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                      <Package className="h-4 w-4 text-blue-600" />
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                      isCodeNode(result.nodeType)
+                        ? 'bg-purple-100'
+                        : 'bg-blue-100'
+                    }`}>
+                      {isCodeNode(result.nodeType) ? (
+                        <Code className="h-4 w-4 text-purple-600" />
+                      ) : (
+                        <Package className="h-4 w-4 text-blue-600" />
+                      )}
                     </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900">
@@ -95,37 +127,74 @@ const ResultsList: React.FC<ResultsListProps> = ({ searchResults, onCopy, onExpo
               {isExpanded && (
                 <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50">
                   <div className="pt-4 space-y-3">
-                    {result.matches.map((match, matchIndex) => (
-                      <div key={matchIndex} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <Search className="h-4 w-4 text-green-600" />
-                            <span className="text-sm font-medium text-gray-700 bg-green-50 px-3 py-1 rounded-full border border-green-200">
-                              {match.field}
-                            </span>
+                    {result.matches.map((match, matchIndex) => {
+                      const isJsMatch = isJavaScriptMatch(match);
+                      const formattedCode = formatCodeSnippet(match.expression, isJsMatch);
+
+                      return (
+                        <div key={matchIndex} className={`bg-white rounded-lg p-4 border shadow-sm ${
+                          isJsMatch ? 'border-purple-200' : 'border-gray-200'
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-2">
+                              {isJsMatch ? (
+                                <Code className="h-4 w-4 text-purple-600" />
+                              ) : (
+                                <Search className="h-4 w-4 text-green-600" />
+                              )}
+                              <span className={`text-sm font-medium text-gray-700 px-3 py-1 rounded-full border ${
+                                isJsMatch
+                                  ? 'bg-purple-50 border-purple-200'
+                                  : 'bg-green-50 border-green-200'
+                              }`}>
+                                {match.field}
+                              </span>
+                              {isJsMatch && (
+                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                  JavaScript
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => onCopy(match.expression)}
+                                className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                                title="Copy expression"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                              {match.fullValue !== match.expression && (
+                                <button
+                                  onClick={() => onCopy(match.fullValue)}
+                                  className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors text-xs"
+                                  title="Copy full code"
+                                >
+                                  Full
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <button
-                            onClick={() => onCopy(match.expression)}
-                            className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
-                            title="Copy expression"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </button>
-                        </div>
-                        
-                        <div className="bg-gray-50 rounded border p-3 mb-3">
-                          <code className="text-sm text-gray-800 break-all font-mono">
-                            {match.expression}
-                          </code>
-                        </div>
-                        
-                        {match.context && (
-                          <div className="text-xs text-gray-600 bg-white p-2 rounded border">
-                            <span className="font-medium text-gray-700">Context:</span> {match.context}
+
+                          <div className={`rounded border p-3 mb-3 ${
+                            isJsMatch ? 'bg-purple-50' : 'bg-gray-50'
+                          }`}>
+                            <code className={`text-sm break-all font-mono ${
+                              isJsMatch ? 'text-purple-800' : 'text-gray-800'
+                            }`}>
+                              {formattedCode}
+                            </code>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {match.context && (
+                            <div className={`text-xs text-gray-600 bg-white p-2 rounded border ${
+                              isJsMatch && 'border-purple-100'
+                            }`}>
+                              <span className="font-medium text-gray-700">Context:</span> {match.context}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

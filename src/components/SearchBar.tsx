@@ -18,7 +18,15 @@ const EXAMPLES = [
   { label: 'Nested', icon: <FileText className="h-4 w-4 text-orange-600 mr-2" />, pattern: '.item.json.field' },
 ];
 
-const SearchBar: React.FC<SearchBarProps> = ({ searchTerm, onChange, onSearch, loading, disabled, onKeyPress, onExampleClick }) => {
+const SearchBar: React.FC<SearchBarProps> = ({
+  searchTerm,
+  onChange,
+  onSearch,
+  loading,
+  disabled,
+  onKeyPress,
+  onExampleClick
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const isSearchTermEmpty = !searchTerm || searchTerm.trim() === '';
   const isButtonDisabled = loading || disabled || isSearchTermEmpty;

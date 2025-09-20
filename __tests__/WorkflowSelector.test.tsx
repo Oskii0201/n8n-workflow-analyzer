@@ -24,40 +24,55 @@ describe('WorkflowSelector', () => {
 
   it('renders with placeholder when no workflow is selected', () => {
     render(<WorkflowSelector {...defaultProps} />);
-    
-    expect(screen.getByText('Select workflow...')).toBeInTheDocument();
+
+    expect(screen.getByPlaceholderText('Search workflows...')).toBeInTheDocument();
   });
 
-  it('displays all workflows in dropdown', () => {
+  it('displays all workflows in dropdown when focused', async () => {
+    const user = userEvent.setup();
     render(<WorkflowSelector {...defaultProps} />);
-    
-    expect(screen.getByText("Workflow 1 (5 nodes) 🟢")).toBeInTheDocument();
-    expect(screen.getByText("Workflow 2 (3 nodes) 🔴")).toBeInTheDocument();
-    expect(screen.getByText("Workflow 3 (7 nodes) 🔴")).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('Search workflows...');
+    await user.click(input);
+
+    // Wait for dropdown to appear and check for workflow names
+    await waitFor(() => {
+      expect(screen.getByText('Workflow 1')).toBeInTheDocument();
+      expect(screen.getByText('Workflow 2')).toBeInTheDocument();
+      expect(screen.getByText('Workflow 3')).toBeInTheDocument();
+    });
   });
 
   it('shows selected workflow', () => {
     render(<WorkflowSelector {...defaultProps} selectedWorkflow={mockWorkflows[1]} />);
-    
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
-    expect(select.value).toBe('2');
+
+    const input = screen.getByDisplayValue('Workflow 2');
+    expect(input).toBeInTheDocument();
   });
 
-  it('calls onSelect when workflow is selected', () => {
+  it('calls onSelect when workflow is selected', async () => {
+    const user = userEvent.setup();
     render(<WorkflowSelector {...defaultProps} />);
-    
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: '2' } });
-    
+
+    const input = screen.getByPlaceholderText('Search workflows...');
+    await user.click(input);
+
+    await waitFor(() => {
+      expect(screen.getByText('Workflow 2')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Workflow 2'));
+
     expect(defaultProps.onSelect).toHaveBeenCalledWith(mockWorkflows[1]);
   });
 
-  it('calls onSelect with null when placeholder is selected', () => {
+  it('calls onSelect with null when clear button is clicked', async () => {
+    const user = userEvent.setup();
     render(<WorkflowSelector {...defaultProps} selectedWorkflow={mockWorkflows[0]} />);
-    
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: '' } });
-    
+
+    const clearButton = screen.getByTitle('Clear selection');
+    await user.click(clearButton);
+
     expect(defaultProps.onSelect).toHaveBeenCalledWith(null);
   });
 
@@ -88,40 +103,51 @@ describe('WorkflowSelector', () => {
     expect(screen.queryByText('No workflows available')).not.toBeInTheDocument();
   });
 
-  it('shows active workflow indicator', () => {
+  it('shows active workflow indicator', async () => {
+    const user = userEvent.setup();
     render(<WorkflowSelector {...defaultProps} />);
-    
-    const activeOption = screen.getByText('Workflow 1 (5 nodes) 🟢');
-    expect(activeOption).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('Search workflows...');
+    await user.click(input);
+
+    await waitFor(() => {
+      expect(screen.getByText('Active')).toBeInTheDocument();
+    });
   });
 
-  it('shows inactive workflow indicator', () => {
+  it('shows inactive workflow indicator', async () => {
+    const user = userEvent.setup();
     render(<WorkflowSelector {...defaultProps} />);
-    
-    const inactiveOption = screen.getByText('Workflow 2 (3 nodes) 🔴');
-    expect(inactiveOption).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('Search workflows...');
+    await user.click(input);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Inactive')).toHaveLength(2);
+    });
   });
 
   it('maintains selection when workflows are updated', () => {
     const { rerender } = render(<WorkflowSelector {...defaultProps} selectedWorkflow={mockWorkflows[1]} />);
-    
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
-    expect(select.value).toBe('2');
-    
-  
+
+    expect(screen.getByDisplayValue('Workflow 2')).toBeInTheDocument();
+
     const updatedWorkflows = [...mockWorkflows, { id: '4', name: 'Workflow 4', active: false, nodes: 2, updatedAt: '2023-01-04' }];
     rerender(<WorkflowSelector {...defaultProps} workflows={updatedWorkflows} selectedWorkflow={mockWorkflows[1]} />);
-    
-    expect(select.value).toBe('2');
+
+    expect(screen.getByDisplayValue('Workflow 2')).toBeInTheDocument();
   });
 
-  it('handles workflow selection with non-existent workflow', () => {
+  it('handles search with no results', async () => {
+    const user = userEvent.setup();
     render(<WorkflowSelector {...defaultProps} />);
-    
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'non-existent' } });
-    
-    expect(defaultProps.onSelect).toHaveBeenCalledWith(null);
+
+    const input = screen.getByPlaceholderText('Search workflows...');
+    await user.type(input, 'nonexistent');
+
+    await waitFor(() => {
+      expect(screen.getByText('No workflows found matching "nonexistent"')).toBeInTheDocument();
+    });
   });
 
   it('shows refresh button when not loading', () => {

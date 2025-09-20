@@ -79,7 +79,30 @@ const mockPOST = async (request: NextRequest) => {
 
           if (typeof value === 'string') {
             const escapedSearchTerm = escapeRegex(searchTerm);
-            const searchPatterns = [
+            const isCodeNode = node.type === 'n8n-nodes-base.code' ||
+                             node.type === 'n8n-nodes-base.function' ||
+                             node.type === 'n8n-nodes-base.functionItem';
+
+            // JavaScript patterns
+            const jsPatterns = [
+              new RegExp(`function\\s+${escapedSearchTerm}\\s*\\(`, 'gi'),
+              new RegExp(`const\\s+${escapedSearchTerm}\\s*=`, 'gi'),
+              new RegExp(`let\\s+${escapedSearchTerm}\\s*=`, 'gi'),
+              new RegExp(`var\\s+${escapedSearchTerm}\\s*=`, 'gi'),
+              new RegExp(`\\.${escapedSearchTerm}\\s*\\(`, 'gi'),
+              new RegExp(`\\.${escapedSearchTerm}\\b`, 'gi'),
+              new RegExp(`${escapedSearchTerm}\\s*=\\s*`, 'gi'),
+              new RegExp(`${escapedSearchTerm}\\s*\\(`, 'gi'),
+              new RegExp(`\\[['"]${escapedSearchTerm}['"]\\]`, 'gi'),
+              new RegExp(`${escapedSearchTerm}\\s*:`, 'gi'),
+              new RegExp(`class\\s+${escapedSearchTerm}\\b`, 'gi'),
+              new RegExp(`new\\s+${escapedSearchTerm}\\s*\\(`, 'gi'),
+              new RegExp(`import.*${escapedSearchTerm}`, 'gi'),
+              new RegExp(`export.*${escapedSearchTerm}`, 'gi'),
+            ];
+
+            // Base n8n patterns
+            const basePatterns = [
               new RegExp(`\\b${escapedSearchTerm}\\b`, 'gi'),
               new RegExp(`\\$\\(['"]${escapedSearchTerm}['"]\\)`, 'gi'),
               new RegExp(`\\$node\\[['"]${escapedSearchTerm}['"]\\]`, 'gi'),
@@ -94,17 +117,49 @@ const mockPOST = async (request: NextRequest) => {
               new RegExp(`\\$input.*${escapedSearchTerm}.*`, 'gi'),
             ];
 
-            searchPatterns.forEach(pattern => {
+            const searchPatterns = isCodeNode ? [...jsPatterns, ...basePatterns] : [...basePatterns, ...jsPatterns];
+
+            const foundMatches = new Set();
+
+            searchPatterns.forEach((pattern, patternIndex) => {
               try {
                 const matches_in_string = value.match(pattern);
                 if (matches_in_string) {
-                  matches.push({
-                    field: currentPath,
-                    expression: value,
-                    fullValue: value,
-                    context: `Node: ${node.name}`,
-                    matchIndex: matchIndex++
-                  });
+                  // For code nodes, try to extract line context
+                  let context = `Node: ${node.name}`;
+                  let enhancedExpression = value;
+                  let matchKey = `${currentPath}-${value}`;
+
+                  if (isCodeNode && value.length > 100) {
+                    // Split into lines to find the matching line
+                    const lines = value.split('\n');
+                    const matchingLines = lines.filter(line => pattern.test(line));
+
+                    if (matchingLines.length > 0) {
+                      const bestMatch = matchingLines[0].trim();
+                      const lineNumber = lines.findIndex(line => pattern.test(line)) + 1;
+
+                      enhancedExpression = bestMatch;
+                      context = `Code Node: ${node.name} (Line ${lineNumber})`;
+                      matchKey = `${currentPath}-${bestMatch}`;
+                    }
+                  }
+
+                  if (!foundMatches.has(matchKey)) {
+                    foundMatches.add(matchKey);
+
+                    matches.push({
+                      field: currentPath,
+                      expression: enhancedExpression,
+                      fullValue: value,
+                      context,
+                      matchIndex: matchIndex++
+                    });
+
+                    if (isCodeNode && patternIndex < jsPatterns.length && enhancedExpression !== value) {
+                      return;
+                    }
+                  }
                 }
               } catch (regexError) {
                 // Ignore regex errors in tests
@@ -511,5 +566,242 @@ describe('Search Variable API', () => {
       expect(data.success).toBe(true);
       expect(data.data.results.length).toBeGreaterThan(0);
     });
+
+    it('should search JavaScript code in Code nodes when includeJavaScript is true', async () => {
+      const mockCodeWorkflow = {
+        ...mockWorkflowData,
+        nodes: [
+          {
+            id: 'code-node-1',
+            name: 'JavaScript Code',
+            type: 'n8n-nodes-base.code',
+            typeVersion: 1,
+            position: [100, 100],
+            parameters: {
+              jsCode: `
+                function processData(input) {
+                  const result = input.map(item => {
+                    return {
+                      id: item.id,
+                      name: item.name.toUpperCase(),
+                      processedAt: new Date()
+                    };
+                  });
+                  return result;
+                }
+
+                const data = $input.all();
+                return processData(data);
+              `.trim()
+            }
+          },
+          {
+            id: 'function-node-1',
+            name: 'Function Node',
+            type: 'n8n-nodes-base.function',
+            typeVersion: 1,
+            position: [300, 100],
+            parameters: {
+              functionCode: `
+                let processedItems = [];
+                for (const item of items) {
+                  processedItems.push({
+                    ...item.json,
+                    timestamp: Date.now()
+                  });
+                }
+                return processedItems;
+              `.trim()
+            }
+          }
+        ]
+      };
+
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: mockCodeWorkflow }),
+      } as Response);
+
+      const request = createMockRequest({
+        apiKey: 'valid-key',
+        baseUrl: 'http://localhost:5678',
+        workflowId: 'test-workflow',
+        searchTerm: 'processData'
+      });
+
+      const response = await mockPOST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.results).toBeInstanceOf(Array);
+      expect(data.data.results.length).toBeGreaterThan(0);
+
+      // Should find the function declaration
+      const codeNodeResult = data.data.results.find((r: any) => r.nodeType === 'n8n-nodes-base.code');
+      expect(codeNodeResult).toBeDefined();
+      expect(codeNodeResult.matches.length).toBeGreaterThan(0);
+    });
+
+    it('should search for JavaScript variables and method calls', async () => {
+      const mockCodeWorkflow = {
+        ...mockWorkflowData,
+        nodes: [
+          {
+            id: 'code-node-2',
+            name: 'Variable Test',
+            type: 'n8n-nodes-base.code',
+            typeVersion: 1,
+            position: [100, 100],
+            parameters: {
+              jsCode: `
+                const userInput = $input.first().json;
+                let processedData = userInput.map(item => item.value);
+                var result = processedData.filter(x => x > 0);
+
+                function calculateTotal(items) {
+                  return items.reduce((sum, item) => sum + item, 0);
+                }
+
+                const total = calculateTotal(result);
+                return { total, processedData };
+              `.trim()
+            }
+          }
+        ]
+      };
+
+      const testCases = [
+        { searchTerm: 'userInput', expectedMatches: 2 }, // const declaration + usage
+        { searchTerm: 'processedData', expectedMatches: 3 }, // let declaration + assignment + return
+        { searchTerm: 'calculateTotal', expectedMatches: 2 }, // function declaration + call
+      ];
+
+      for (const testCase of testCases) {
+        const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ data: mockCodeWorkflow }),
+        } as Response);
+
+        const request = createMockRequest({
+          apiKey: 'valid-key',
+          baseUrl: 'http://localhost:5678',
+          workflowId: 'test-workflow',
+          searchTerm: testCase.searchTerm
+        });
+
+        const response = await mockPOST(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.success).toBe(true);
+        expect(data.data.results.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('should prioritize JavaScript patterns for Code nodes', async () => {
+      const mockCodeWorkflow = {
+        ...mockWorkflowData,
+        nodes: [
+          {
+            id: 'code-node-3',
+            name: 'JS Priority Test',
+            type: 'n8n-nodes-base.code',
+            typeVersion: 1,
+            position: [100, 100],
+            parameters: {
+              jsCode: `
+                function testFunction() {
+                  const testVariable = 'test';
+                  return testVariable;
+                }
+              `.trim()
+            }
+          }
+        ]
+      };
+
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: mockCodeWorkflow }),
+      } as Response);
+
+      const request = createMockRequest({
+        apiKey: 'valid-key',
+        baseUrl: 'http://localhost:5678',
+        workflowId: 'test-workflow',
+        searchTerm: 'testFunction'
+      });
+
+      const response = await mockPOST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.results.length).toBeGreaterThan(0);
+
+      // Should find JavaScript function declaration
+      const codeNodeResult = data.data.results.find((r: any) => r.nodeType === 'n8n-nodes-base.code');
+      expect(codeNodeResult).toBeDefined();
+      expect(codeNodeResult.matches.length).toBeGreaterThan(0);
+    });
+
+    it('should provide enhanced context for Code node matches', async () => {
+      const mockCodeWorkflow = {
+        ...mockWorkflowData,
+        nodes: [
+          {
+            id: 'code-node-4',
+            name: 'Context Test',
+            type: 'n8n-nodes-base.code',
+            typeVersion: 1,
+            position: [100, 100],
+            parameters: {
+              jsCode: `// Line 1
+const data = $input.first();
+// Line 3
+function processItem(item) {
+  return item.json;
+}
+// Line 7
+const result = processItem(data);
+return result;`.trim()
+            }
+          }
+        ]
+      };
+
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: mockCodeWorkflow }),
+      } as Response);
+
+      const request = createMockRequest({
+        apiKey: 'valid-key',
+        baseUrl: 'http://localhost:5678',
+        workflowId: 'test-workflow',
+        searchTerm: 'processItem'
+      });
+
+      const response = await mockPOST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+
+      // Should have enhanced context with line numbers for Code nodes
+      const codeNodeResult = data.data.results.find((r: any) => r.nodeType === 'n8n-nodes-base.code');
+      expect(codeNodeResult).toBeDefined();
+
+      // At least one match should have "Code Node" context with line number
+      const hasEnhancedContext = codeNodeResult.matches.some((match: any) =>
+        match.context.includes('Code Node') && match.context.includes('Line')
+      );
+      expect(hasEnhancedContext).toBe(true);
+    });
   });
-}); 
+});

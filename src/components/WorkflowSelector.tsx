@@ -34,6 +34,11 @@ const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({ workflows, selected
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Update search term when selected workflow changes
+  useEffect(() => {
+    setSearchTerm(selectedWorkflow?.name || '');
+  }, [selectedWorkflow]);
+
   // Sort workflows: active first, then inactive
   const sortedWorkflows = useMemo(() => {
     return [...workflows].sort((a, b) => {
