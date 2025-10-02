@@ -27,40 +27,58 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
 
     const normalizedUrl = baseUrl.replace(/\/$/, '');
 
-    const response = await fetch(`${normalizedUrl}/api/v1/workflows`, {
-      method: 'GET',
-      headers: {
-        'X-N8N-API-KEY': apiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
+    // Fetch all workflows with pagination
+    let allWorkflowsData: Record<string, unknown>[] = [];
+    let cursor: string | undefined;
+    let hasMore = true;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `HTTP error! status: ${response.status}`;
+    while (hasMore) {
+      const url = cursor
+        ? `${normalizedUrl}/api/v1/workflows?limit=100&cursor=${cursor}`
+        : `${normalizedUrl}/api/v1/workflows?limit=100`;
 
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.message || errorMessage;
-      } catch {
-        errorMessage = errorText || errorMessage;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-N8N-API-KEY': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `HTTP error! status: ${response.status}`;
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+
+        return NextResponse.json(
+          { success: false, error: errorMessage },
+          { status: response.status }
+        );
       }
 
-      return NextResponse.json(
-        { success: false, error: errorMessage },
-        { status: response.status }
-      );
+      const data = await response.json();
+      allWorkflowsData = allWorkflowsData.concat(data.data || []);
+
+      cursor = data.nextCursor;
+      hasMore = !!cursor;
     }
 
-    const data = await response.json();
-    const workflows: Workflow[] = (data.data || []).map((workflow: Record<string, unknown>) => ({
-      id: workflow.id as string,
-      name: workflow.name as string,
-      active: workflow.active as boolean,
-      nodes: Array.isArray(workflow.nodes) ? workflow.nodes.length : 0,
-      updatedAt: workflow.updatedAt as string
-    }));
+    const workflows: Workflow[] = allWorkflowsData
+      .filter((workflow: Record<string, unknown>) => workflow.isArchived !== true)
+      .map((workflow: Record<string, unknown>) => ({
+        id: workflow.id as string,
+        name: workflow.name as string,
+        active: workflow.active as boolean,
+        nodes: Array.isArray(workflow.nodes) ? workflow.nodes.length : 0,
+        updatedAt: workflow.updatedAt as string
+      }));
 
     return NextResponse.json({
       success: true,
