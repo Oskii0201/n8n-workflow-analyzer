@@ -4,7 +4,6 @@ import { Loader2, Search, Zap, Code, Database, FileText } from 'lucide-react';
 interface SearchBarProps {
   searchTerm: string;
   onChange: (value: string) => void;
-  onSearch: () => void;
   loading: boolean;
   disabled: boolean;
   onKeyPress: (e: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -21,7 +20,6 @@ const EXAMPLES = [
 const SearchBar: React.FC<SearchBarProps> = ({
   searchTerm,
   onChange,
-  onSearch,
   loading,
   disabled,
   onKeyPress,

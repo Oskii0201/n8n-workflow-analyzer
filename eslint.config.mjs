@@ -1,16 +1,39 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
+import nextTypescript from 'eslint-config-next/typescript'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const config = [
+  ...nextCoreWebVitals,
+  ...nextTypescript,
+  {
+    ignores: [
+      'src/app/api/n8n/schedules/**',
+      'src/app/tools/weekly-scheduler/**',
+      'src/hooks/useWeeklyScheduler.ts',
+    ],
+  },
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx', '__tests__/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['jest.setup.ts'],
+    rules: {
+      '@typescript-eslint/no-namespace': 'off',
+    },
+  },
+  {
+    files: [
+      '**/jest.config.js',
+      '**/tailwind.config.js',
+      '**/next.config.ts',
+      '**/postcss.config.js',
+    ],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+]
 
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
-];
-
-export default eslintConfig;
+export default config

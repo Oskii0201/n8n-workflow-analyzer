@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Search, LogOut, Settings, Database, Menu, X, User } from 'lucide-react';
+import { Search, LogOut, Settings, Database, Menu, X } from 'lucide-react';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useConnections } from '@/src/hooks/useConnections';
 import { ThemeToggle } from './ThemeToggle';

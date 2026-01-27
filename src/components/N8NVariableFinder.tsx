@@ -11,7 +11,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useConnections } from '@/src/hooks/useConnections';
 import { useWorkflows } from '@/src/hooks/useWorkflows';
 import { useSearchVariable } from '@/src/hooks/useSearchVariable';
-import type { Workflow, SearchResult } from '@/src/types/n8n';
+import type { Workflow } from '@/src/types/n8n';
 import { Button } from './ui/button';
 
 const N8NVariableFinder: React.FC = () => {
@@ -93,7 +93,7 @@ const N8NVariableFinder: React.FC = () => {
         }, 800); // 800ms debounce
 
         return () => clearTimeout(timeoutId);
-    }, [searchTerm, selectedWorkflow]); // Don't include searchVariable to avoid infinite loop
+    }, [searchTerm, selectedWorkflow, searchVariable]);
 
     // Show loading state while checking authentication or connections
     if (authLoading || connectionsLoading) {
@@ -155,7 +155,6 @@ const N8NVariableFinder: React.FC = () => {
                 <SearchBar
                     searchTerm={searchTerm}
                     onChange={setSearchTerm}
-                    onSearch={searchVariable}
                     loading={loading}
                     disabled={!selectedWorkflow}
                     onKeyPress={handleKeyPress}

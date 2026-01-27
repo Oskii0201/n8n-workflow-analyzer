@@ -36,6 +36,7 @@ const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({ workflows, selected
 
   // Update search term when selected workflow changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchTerm(selectedWorkflow?.name || '');
   }, [selectedWorkflow]);
 
