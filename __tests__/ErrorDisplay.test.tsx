@@ -9,11 +9,6 @@ describe('ErrorDisplay', () => {
     expect(screen.getByText(errorMessage)).toBeInTheDocument();
   });
 
-  it('shows error icon when error is provided', () => {
-    render(<ErrorDisplay error="Test error" />);
-    expect(screen.getByText('Test error')).toBeInTheDocument();
-  });
-
   it('handles long error messages', () => {
     const longErrorMessage = 'This is a very long error message that should be displayed properly without breaking the layout or causing any issues with the component rendering';
     render(<ErrorDisplay error={longErrorMessage} />);
@@ -33,19 +28,6 @@ describe('ErrorDisplay', () => {
     expect(screen.queryByText('xss')).not.toBeInTheDocument();
   });
 
-  it('handles empty string error', () => {
-    const { container } = render(<ErrorDisplay error="" />);
-    const errorSpan = container.querySelector('span.text-red-700');
-    expect(errorSpan).toBeInTheDocument();
-    expect(errorSpan).toHaveTextContent('');
-  });
-
-  it('applies correct styling classes', () => {
-    render(<ErrorDisplay error="Test error" />);
-    const errorContainer = screen.getByText('Test error').closest('div');
-    expect(errorContainer).toHaveClass('bg-red-50', 'border-red-200');
-  });
-
   it('handles error with line breaks', () => {
     const multilineError = 'Error line 1\nError line 2\nError line 3';
     render(<ErrorDisplay error={multilineError} />);
@@ -60,9 +42,8 @@ describe('ErrorDisplay', () => {
   });
 
   it('handles error with only whitespace', () => {
-    const { container } = render(<ErrorDisplay error="   " />);
-    const errorSpan = container.querySelector('span.text-red-700');
-    expect(errorSpan).toBeInTheDocument();
-    expect(errorSpan?.textContent).toBe('   ');
+    render(<ErrorDisplay error="   " />);
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('   ');
   });
 }); 

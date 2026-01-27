@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthContext } from '@/src/lib/auth-helpers';
+import { resolveConnection } from '@/src/lib/n8n-connection';
+import { fetchN8n } from '@/src/lib/n8n-client';
+import { requireString } from '@/src/lib/validation';
+import { rateLimit } from '@/src/lib/rate-limit';
 
 interface Workflow {
   id: string;
@@ -16,16 +21,48 @@ interface ApiResponse {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse>> {
   try {
-    const { apiKey, baseUrl } = await request.json();
+    const limit = rateLimit(request, 'n8n:workflows', { limit: 30, windowMs: 60_000 })
+    if (!limit.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+      )
+    }
+    const { user, supabase } = await getAuthContext();
 
-    if (!apiKey || !baseUrl) {
+    if (!user) {
       return NextResponse.json({
         success: false,
-        error: 'Missing required parameters: apiKey or baseUrl'
-      }, { status: 400 });
+        error: 'Unauthorized'
+      }, { status: 401 });
     }
 
-    const normalizedUrl = baseUrl.replace(/\/$/, '');
+    const body = await request.json();
+    const connectionId =
+      body?.connectionId !== undefined
+        ? requireString(body.connectionId, 'connectionId', { minLength: 1, trim: true })
+        : null;
+
+    if (connectionId && !connectionId.ok) {
+      return NextResponse.json(
+        { success: false, error: connectionId.error },
+        { status: 400 }
+      );
+    }
+
+    const resolved = await resolveConnection(
+      supabase,
+      user.id,
+      connectionId ? connectionId.value : undefined
+    );
+    if (!resolved.ok) {
+      return NextResponse.json(
+        { success: false, error: resolved.error },
+        { status: resolved.status }
+      );
+    }
+
+    const normalizedUrl = resolved.baseUrl;
 
     // Fetch all workflows with pagination
     let allWorkflowsData: Record<string, unknown>[] = [];
@@ -37,36 +74,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
         ? `${normalizedUrl}/api/v1/workflows?limit=100&cursor=${cursor}`
         : `${normalizedUrl}/api/v1/workflows?limit=100`;
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'X-N8N-API-KEY': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      });
+      const response = await fetchN8n<{ data?: Record<string, unknown>[]; nextCursor?: string }>(
+        url,
+        resolved.apiKey
+      );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = `HTTP error! status: ${response.status}`;
-
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.message || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-
         return NextResponse.json(
-          { success: false, error: errorMessage },
+          { success: false, error: response.error },
           { status: response.status }
         );
       }
 
-      const data = await response.json();
-      allWorkflowsData = allWorkflowsData.concat(data.data || []);
+      allWorkflowsData = allWorkflowsData.concat(response.data.data || []);
 
-      cursor = data.nextCursor;
+      cursor = response.data.nextCursor;
       hasMore = !!cursor;
     }
 

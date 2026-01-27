@@ -2,104 +2,157 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Search, Settings, Users, Menu, X } from 'lucide-react';
-import { useConnection } from '../contexts/ConnectionContext';
-import SessionManagerModal from './SessionManagerModal';
-
-const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/workflows', label: 'Variable Finder' },
-];
+import { Search, LogOut, Settings, Database, Menu, X, User } from 'lucide-react';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useConnections } from '@/src/hooks/useConnections';
+import { ThemeToggle } from './ThemeToggle';
+import { Button } from './ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { Badge } from './ui/badge';
 
 const Navbar: React.FC = () => {
   const [open, setOpen] = useState(false);
-  const [showSessionManager, setShowSessionManager] = useState(false);
-  const { sessions, activeSessionId, onShowSettings, onDisconnect } = useConnection();
-  const activeSession = activeSessionId ? sessions.find(s => s.id === activeSessionId) : null;
-  const isConnected = !!activeSession?.isConnected;
+  const { user, signOut } = useAuth();
+  const { activeConnection } = useConnections({ enabled: !!user });
+
+  const navLinks = user
+    ? [
+        { href: '/dashboard', label: 'Dashboard' },
+        { href: '/tools/variable-finder', label: 'Variable Finder' },
+        { href: '/tools/weekly-scheduler', label: 'Weekly Scheduler' },
+        { href: '/connections', label: 'Connections' },
+      ]
+    : [
+        { href: '/', label: 'Home' },
+      ];
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.href = '/auth/login';
+  };
+
+  const userInitials = user?.email
+    ? user.email
+        .split('@')[0]
+        .split('.')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : 'U';
+
   return (
-    <>
-      <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50 w-full">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-          <div className="flex flex-row items-center justify-between h-16 gap-2 w-full">
-            <div className="flex flex-row items-center space-x-3 min-w-0">
-              <div className="bg-blue-100 rounded-full p-2 flex items-center justify-center">
-                <Search className="h-7 w-7 text-blue-600" />
-              </div>
-              <span className="text-xl font-bold text-gray-900 truncate">N8N Workflow Analyzer</span>
-              <span className="flex items-center ml-2">
-                <span className={`h-3 w-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'} inline-block mr-1`} />
-                <span className={`text-sm font-medium ${isConnected ? 'text-green-700' : 'text-gray-500'}`}>
-                  {isConnected ? 'Connected' : 'Offline'}
-                </span>
+    <nav className="bg-card border-b border-border shadow-sm sticky top-0 z-50 w-full">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+        <div className="flex flex-row items-center justify-between h-16 gap-2 w-full">
+          <div className="flex flex-row items-center space-x-3 min-w-0">
+            <div className="bg-primary/10 rounded-full p-2 flex items-center justify-center">
+              <Search className="h-7 w-7 text-primary" />
+            </div>
+            <Link href={user ? '/dashboard' : '/'}>
+              <span className="text-xl font-bold text-foreground truncate cursor-pointer hover:text-primary transition-colors">
+                N8N Workflow Analyzer
               </span>
-            </div>
-
-            <div className="hidden md:flex flex-row items-center space-x-2 ml-6">
-              {navLinks.map(link => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded transition-colors font-medium"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </div>
-
-            <div className="flex flex-row items-center space-x-2 ml-2">
-              <button
-                onClick={() => setShowSessionManager(true)}
-                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                title="Manage Sessions"
-              >
-                <Users className="h-5 w-5" />
-              </button>
-              {isConnected && (
-                <>
-                  <button
-                    onClick={onShowSettings}
-                    className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                    title="Settings"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={onDisconnect}
-                    className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    Disconnect
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => setOpen(!open)}
-                className="md:hidden p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-            </div>
+            </Link>
+            {user && activeConnection && (
+              <Badge variant="outline" className="hidden sm:flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                {activeConnection.name}
+              </Badge>
+            )}
           </div>
 
-          {open && (
-            <div className="md:hidden border-t border-gray-200 py-2">
-              {navLinks.map(link => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition-colors"
-                  onClick={() => setOpen(false)}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </div>
-          )}
+          <div className="hidden md:flex flex-row items-center space-x-2 ml-6">
+            {navLinks.map(link => (
+              <Button key={link.href} variant="ghost" asChild>
+                <Link href={link.href}>{link.label}</Link>
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex flex-row items-center space-x-2 ml-2">
+            <ThemeToggle />
+
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>{userInitials}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">Account</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/connections" className="cursor-pointer">
+                      <Database className="mr-2 h-4 w-4" />
+                      <span>Connections</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" className="cursor-pointer">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sign Out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button asChild>
+                <Link href="/auth/login">Sign In</Link>
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setOpen(!open)}
+              className="md:hidden"
+            >
+              {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
-      </nav>
-      <SessionManagerModal open={showSessionManager} onClose={() => setShowSessionManager(false)} />
-    </>
+
+        {open && (
+          <div className="md:hidden border-t border-border py-2">
+            {navLinks.map(link => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="block px-3 py-2 text-foreground hover:text-primary hover:bg-accent rounded transition-colors"
+                onClick={() => setOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </nav>
   );
 };
 
-export default Navbar; 
+export default Navbar;

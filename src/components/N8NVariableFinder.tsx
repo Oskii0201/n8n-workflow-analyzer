@@ -1,132 +1,52 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import WorkflowSelector from './WorkflowSelector';
 import SearchBar from './SearchBar';
 import ErrorDisplay from './ErrorDisplay';
 import ResultsList from './ResultsList';
-import { Eye } from 'lucide-react';
-import { useConnection } from '../contexts/ConnectionContext';
-import SessionManagerModal from './SessionManagerModal';
-
-interface Workflow {
-    id: string;
-    name: string;
-    active: boolean;
-    nodes: number;
-    updatedAt: string;
-}
-
-interface Match {
-    field: string;
-    expression: string;
-    fullValue: string;
-    context: string;
-    matchIndex: number;
-}
-
-interface SearchResult {
-    nodeName: string;
-    nodeType: string;
-    nodeId: string;
-    matches: Match[];
-}
-
-interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
+import { Eye, Database } from 'lucide-react';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useConnections } from '@/src/hooks/useConnections';
+import { useWorkflows } from '@/src/hooks/useWorkflows';
+import { useSearchVariable } from '@/src/hooks/useSearchVariable';
+import type { Workflow, SearchResult } from '@/src/types/n8n';
+import { Button } from './ui/button';
 
 const N8NVariableFinder: React.FC = () => {
-    const { sessions, activeSessionId } = useConnection();
-    const [showSessionManager, setShowSessionManager] = useState(false);
-    const [workflows, setWorkflows] = useState<Workflow[]>([]);
+    const { user, loading: authLoading } = useAuth();
+    const { activeConnection, loading: connectionsLoading } = useConnections();
+    const { workflows, loading: workflowsLoading, refresh: refreshWorkflows } = useWorkflows(activeConnection?.id);
+    const { results: searchResults, loading: searchLoading, search } = useSearchVariable();
+
     const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-    const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
 
-    const activeSession = sessions.find(s => s.id === activeSessionId);
-    const isSessionReady = useMemo(() => {
-        return activeSession && 
-               activeSession.apiKey && 
-               activeSession.baseUrl && 
-               activeSession.apiKey !== '***encrypted***';
-    }, [activeSession]);
-
-    const loadWorkflows = useCallback(async (): Promise<void> => {
-        if (!isSessionReady || !activeSession) return;
-        
-        setLoading(true);
-        setError('');
-        try {
-            const response = await fetch('/api/n8n/workflows', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    apiKey: activeSession.apiKey, 
-                    baseUrl: activeSession.baseUrl 
-                })
-            });
-            const data: ApiResponse<{ workflows: Workflow[] }> = await response.json();
-            if (data.success && data.data) {
-                setWorkflows(data.data.workflows);
-            } else {
-                setError('Error fetching workflows: ' + (data.error || 'Unknown error'));
-            }
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            setError('Error: ' + errorMessage);
-        } finally {
-            setLoading(false);
-        }
-    }, [isSessionReady, activeSession]);
-
-    useEffect(() => {
-        if (isSessionReady) {
-            loadWorkflows();
-        }
-    }, [isSessionReady, loadWorkflows]);
+    const loading = workflowsLoading || searchLoading;
 
     const searchVariable = useCallback(async (): Promise<void> => {
         if (!selectedWorkflow || !searchTerm.trim()) {
             setError('Select a workflow and enter a variable to search for');
             return;
         }
-        if (!isSessionReady) {
-            setError('No active session');
+        if (!activeConnection) {
+            setError('No active connection');
             return;
         }
 
-        setLoading(true);
         setError('');
-        setSearchResults([]);
-        try {
-            const response = await fetch('/api/n8n/search-variable', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    apiKey: activeSession!.apiKey,
-                    baseUrl: activeSession!.baseUrl,
-                    workflowId: selectedWorkflow.id,
-                    searchTerm: searchTerm.trim()
-                })
-            });
-            const data: ApiResponse<{ results: SearchResult[] }> = await response.json();
-            if (data.success && data.data) {
-                setSearchResults(data.data.results);
-            } else {
-                setError('Search error: ' + (data.error || 'Unknown error'));
-            }
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            setError('Error: ' + errorMessage);
-        } finally {
-            setLoading(false);
+        const result = await search({
+            connectionId: activeConnection.id,
+            workflowId: selectedWorkflow.id,
+            searchTerm: searchTerm.trim()
+        });
+
+        if (!result.success && result.error) {
+            setError(result.error);
         }
-    }, [selectedWorkflow, searchTerm, isSessionReady, activeSession]);
+    }, [selectedWorkflow, searchTerm, activeConnection, search]);
 
     const copyToClipboard = useCallback(async (text: string): Promise<void> => {
         try {
@@ -162,39 +82,74 @@ const N8NVariableFinder: React.FC = () => {
         }
     }, [searchVariable]);
 
-    if (!isSessionReady) {
+    // Auto-search with debounce
+    useEffect(() => {
+        if (!selectedWorkflow || !searchTerm.trim()) {
+            return;
+        }
+
+        const timeoutId = setTimeout(() => {
+            searchVariable();
+        }, 800); // 800ms debounce
+
+        return () => clearTimeout(timeoutId);
+    }, [searchTerm, selectedWorkflow]); // Don't include searchVariable to avoid infinite loop
+
+    // Show loading state while checking authentication or connections
+    if (authLoading || connectionsLoading) {
         return (
-            <>
-                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-                    <div className="bg-white rounded-xl shadow-xl p-8 w-full max-w-md border border-gray-200 text-center">
-                        <h1 className="text-2xl font-bold mb-4">To start, unlock your n8n session</h1>
-                        <p className="mb-6 text-gray-600">
-                            {sessions.length === 0 
-                                ? 'Add a session in your session manager to use the application.'
-                                : 'You have saved sessions. Unlock one with a password to start working.'
-                            }
-                        </p>
-                        <button
-                            onClick={() => setShowSessionManager(true)}
-                            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                        >
-                            {sessions.length === 0 ? 'Add Session' : 'Manage Sessions'}
-                        </button>
-                    </div>
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading...</p>
                 </div>
-                <SessionManagerModal open={showSessionManager} onClose={() => setShowSessionManager(false)} />
-            </>
+            </div>
+        );
+    }
+
+    // Check if user is authenticated
+    if (!user) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
+                <div className="bg-card rounded-xl shadow-xl p-8 w-full max-w-md border border-border text-center">
+                    <h1 className="text-2xl font-bold mb-4">Authentication Required</h1>
+                    <p className="mb-6 text-muted-foreground">
+                        Please sign in to use the N8N Workflow Analyzer.
+                    </p>
+                    <Button asChild>
+                        <Link href="/auth/login">Sign In</Link>
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // Check if there's an active connection
+    if (!activeConnection) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
+                <div className="bg-card rounded-xl shadow-xl p-8 w-full max-w-md border border-border text-center">
+                    <Database className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h1 className="text-2xl font-bold mb-4">No Active Connection</h1>
+                    <p className="mb-6 text-muted-foreground">
+                        Add an n8n connection to start analyzing workflows.
+                    </p>
+                    <Button asChild>
+                        <Link href="/connections">Manage Connections</Link>
+                    </Button>
+                </div>
+            </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-background">
             <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8 flex flex-col gap-4">
                 <WorkflowSelector
                     workflows={workflows}
                     selectedWorkflow={selectedWorkflow}
                     onSelect={setSelectedWorkflow}
-                    onRefresh={loadWorkflows}
+                    onRefresh={refreshWorkflows}
                     loading={loading}
                 />
                 <SearchBar
@@ -215,13 +170,13 @@ const N8NVariableFinder: React.FC = () => {
                     />
                 )}
                 {searchResults.length === 0 && searchTerm && !loading && !error && (
-                    <div className="text-center py-8 sm:py-12 bg-white rounded-xl shadow-sm border border-gray-200">
-                        <Eye className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
-                        <p className="text-gray-500 break-words">
-                            No variable <span className="font-mono bg-gray-100 px-2 py-1 rounded">&quot;{searchTerm}&quot;</span> found in the selected workflow
+                    <div className="text-center py-8 sm:py-12 bg-card rounded-xl shadow-sm border border-border">
+                        <Eye className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-medium mb-2">No results found</h3>
+                        <p className="text-muted-foreground break-words">
+                            No variable <span className="font-mono bg-muted px-2 py-1 rounded">&quot;{searchTerm}&quot;</span> found in the selected workflow
                         </p>
-                        <div className="mt-4 text-sm text-gray-400">
+                        <div className="mt-4 text-sm text-muted-foreground">
                             Check if the variable name is correct and if the workflow contains the expected nodes
                         </div>
                     </div>

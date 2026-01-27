@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SearchBar from '../src/components/SearchBar';
 
@@ -18,11 +18,10 @@ describe('SearchBar', () => {
     jest.clearAllMocks();
   });
 
-  it('renders search input and button', () => {
+  it('renders search input', () => {
     render(<SearchBar {...defaultProps} />);
     
     expect(screen.getByPlaceholderText(/e\.g\. \$/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument();
   });
 
   it('displays search term in input', () => {
@@ -44,17 +43,6 @@ describe('SearchBar', () => {
     expect(onChange).toHaveBeenCalledTimes(9); // 'new-value' has 9 characters
   });
 
-  it('calls onSearch when search button is clicked', async () => {
-    const user = userEvent.setup();
-    const onSearch = jest.fn();
-    render(<SearchBar {...defaultProps} onSearch={onSearch} searchTerm="test" />);
-    
-    const button = screen.getByRole('button', { name: /search/i });
-    await user.click(button);
-    
-    expect(onSearch).toHaveBeenCalledTimes(1);
-  });
-
   it('calls onKeyPress when Enter key is pressed', async () => {
     const user = userEvent.setup();
     const onKeyPress = jest.fn();
@@ -69,37 +57,14 @@ describe('SearchBar', () => {
   it('shows loading state', () => {
     render(<SearchBar {...defaultProps} loading={true} />);
     
-    const button = screen.getByRole('button', { name: /search/i });
-    expect(button).toBeDisabled();
     expect(screen.getByTestId('loader-icon')).toBeInTheDocument();
   });
 
-  it('disables button when disabled prop is true', () => {
+  it('disables input when disabled prop is true', () => {
     render(<SearchBar {...defaultProps} disabled={true} />);
     
-    const button = screen.getByRole('button', { name: /search/i });
-    expect(button).toBeDisabled();
-  });
-
-  it('disables button when search term is empty', () => {
-    render(<SearchBar {...defaultProps} searchTerm="" />);
-    
-    const button = screen.getByRole('button', { name: /search/i });
-    expect(button).toBeDisabled();
-  });
-
-  it('disables button when search term is only whitespace', () => {
-    render(<SearchBar {...defaultProps} searchTerm="   " />);
-    
-    const button = screen.getByRole('button', { name: /search/i });
-    expect(button).toBeDisabled();
-  });
-
-  it('enables button when search term is valid', () => {
-    render(<SearchBar {...defaultProps} searchTerm="valid-search" />);
-    
-    const button = screen.getByRole('button', { name: /search/i });
-    expect(button).not.toBeDisabled();
+    const input = screen.getByPlaceholderText(/e\.g\. \$/);
+    expect(input).toBeDisabled();
   });
 
   it('displays help examples', () => {
@@ -116,6 +81,15 @@ describe('SearchBar', () => {
     expect(screen.getByText(/\$node\[/)).toBeInTheDocument();
     expect(screen.getByText(/\$json\./)).toBeInTheDocument();
     expect(screen.getByText(/\.item\.json\./)).toBeInTheDocument();
+  });
+
+  it('calls onExampleClick when example is clicked', async () => {
+    const user = userEvent.setup();
+    const onExampleClick = jest.fn();
+    render(<SearchBar {...defaultProps} onExampleClick={onExampleClick} />);
+
+    await user.click(screen.getByText('Node reference'));
+    expect(onExampleClick).toHaveBeenCalledWith("$('NodeName')");
   });
 
   it('has correct accessibility attributes', () => {

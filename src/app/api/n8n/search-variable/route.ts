@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthContext } from '@/src/lib/auth-helpers';
+import { resolveConnection } from '@/src/lib/n8n-connection';
+import { fetchN8n } from '@/src/lib/n8n-client';
+import { requireString } from '@/src/lib/validation';
+import { rateLimit } from '@/src/lib/rate-limit';
 
 interface NodeData {
   id: string;
@@ -44,46 +49,78 @@ interface ApiResponse {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse>> {
   try {
-    const { apiKey, baseUrl, workflowId, searchTerm } = await request.json();
+    const limit = rateLimit(request, 'n8n:search-variable', { limit: 20, windowMs: 60_000 })
+    if (!limit.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+      )
+    }
+    const { user, supabase } = await getAuthContext();
 
-    if (!apiKey || !baseUrl || !workflowId || !searchTerm) {
+    if (!user) {
       return NextResponse.json({
         success: false,
-        error: 'Missing required parameters: apiKey, baseUrl, workflowId, or searchTerm'
-      }, { status: 400 });
+        error: 'Unauthorized'
+      }, { status: 401 });
     }
 
-    const normalizedUrl = baseUrl.replace(/\/$/, '');
+    const body = await request.json();
+    const connectionId =
+      body?.connectionId !== undefined
+        ? requireString(body.connectionId, 'connectionId', { minLength: 1, trim: true })
+        : null;
+    const workflowId = requireString(body?.workflowId, 'workflowId', { minLength: 1, trim: true });
+    const searchTerm = requireString(body?.searchTerm, 'searchTerm', { minLength: 1, trim: true });
 
-    const response = await fetch(`${normalizedUrl}/api/v1/workflows/${workflowId}`, {
-      method: 'GET',
-      headers: {
-        'X-N8N-API-KEY': apiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `HTTP error! status: ${response.status}`;
-
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.message || errorMessage;
-      } catch {
-        errorMessage = errorText || errorMessage;
-      }
-
+    if (connectionId && !connectionId.ok) {
       return NextResponse.json(
-        { success: false, error: errorMessage },
-        { status: response.status }
+        { success: false, error: connectionId.error },
+        { status: 400 }
+      );
+    }
+    if (!workflowId.ok) {
+      return NextResponse.json(
+        { success: false, error: workflowId.error },
+        { status: 400 }
+      );
+    }
+    if (!searchTerm.ok) {
+      return NextResponse.json(
+        { success: false, error: searchTerm.error },
+        { status: 400 }
       );
     }
 
-    const workflowResponse = await response.json();
-    const workflow: WorkflowData = workflowResponse.data || workflowResponse;
+    const resolved = await resolveConnection(
+      supabase,
+      user.id,
+      connectionId ? connectionId.value : undefined
+    );
+    if (!resolved.ok) {
+      return NextResponse.json(
+        { success: false, error: resolved.error },
+        { status: resolved.status }
+      );
+    }
 
+    const normalizedUrl = resolved.baseUrl;
+
+    const workflowResponse = await fetchN8n<WorkflowData | { data?: WorkflowData }>(
+      `${normalizedUrl}/api/v1/workflows/${workflowId.value}`,
+      resolved.apiKey
+    );
+
+    if (!workflowResponse.ok) {
+      return NextResponse.json(
+        { success: false, error: workflowResponse.error },
+        { status: workflowResponse.status }
+      );
+    }
+
+    const workflowResponseData = workflowResponse.data;
+    const workflow: WorkflowData =
+      (workflowResponseData as { data?: WorkflowData }).data || (workflowResponseData as WorkflowData);
     if (!workflow || !workflow.nodes) {
       return NextResponse.json({
         success: false,
@@ -110,36 +147,36 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
 
             // For code nodes, prioritize JavaScript patterns for better context
             const jsPatterns = [
-              new RegExp(`function\\s+${escapeRegex(searchTerm)}\\s*\\(`, 'gi'), // Function declarations
-              new RegExp(`const\\s+${escapeRegex(searchTerm)}\\s*=`, 'gi'), // const declarations
-              new RegExp(`let\\s+${escapeRegex(searchTerm)}\\s*=`, 'gi'), // let declarations
-              new RegExp(`var\\s+${escapeRegex(searchTerm)}\\s*=`, 'gi'), // var declarations
-              new RegExp(`\\.${escapeRegex(searchTerm)}\\s*\\(`, 'gi'), // Method calls
-              new RegExp(`\\.${escapeRegex(searchTerm)}\\b`, 'gi'), // Property access
-              new RegExp(`${escapeRegex(searchTerm)}\\s*=\\s*`, 'gi'), // Assignments
-              new RegExp(`${escapeRegex(searchTerm)}\\s*\\(`, 'gi'), // Function calls
-              new RegExp(`\\[['"]${escapeRegex(searchTerm)}['"]\\]`, 'gi'), // Bracket notation
-              new RegExp(`${escapeRegex(searchTerm)}\\s*:`, 'gi'), // Object properties
-              new RegExp(`class\\s+${escapeRegex(searchTerm)}\\b`, 'gi'), // Class declarations
-              new RegExp(`new\\s+${escapeRegex(searchTerm)}\\s*\\(`, 'gi'), // Constructor calls
-              new RegExp(`import.*${escapeRegex(searchTerm)}`, 'gi'), // Import statements
-              new RegExp(`export.*${escapeRegex(searchTerm)}`, 'gi'), // Export statements
+              new RegExp(`function\\s+${escapeRegex(searchTerm.value)}\\s*\\(`, 'gi'), // Function declarations
+              new RegExp(`const\\s+${escapeRegex(searchTerm.value)}\\s*=`, 'gi'), // const declarations
+              new RegExp(`let\\s+${escapeRegex(searchTerm.value)}\\s*=`, 'gi'), // let declarations
+              new RegExp(`var\\s+${escapeRegex(searchTerm.value)}\\s*=`, 'gi'), // var declarations
+              new RegExp(`\\.${escapeRegex(searchTerm.value)}\\s*\\(`, 'gi'), // Method calls
+              new RegExp(`\\.${escapeRegex(searchTerm.value)}\\b`, 'gi'), // Property access
+              new RegExp(`${escapeRegex(searchTerm.value)}\\s*=\\s*`, 'gi'), // Assignments
+              new RegExp(`${escapeRegex(searchTerm.value)}\\s*\\(`, 'gi'), // Function calls
+              new RegExp(`\\[['"]${escapeRegex(searchTerm.value)}['"]\\]`, 'gi'), // Bracket notation
+              new RegExp(`${escapeRegex(searchTerm.value)}\\s*:`, 'gi'), // Object properties
+              new RegExp(`class\\s+${escapeRegex(searchTerm.value)}\\b`, 'gi'), // Class declarations
+              new RegExp(`new\\s+${escapeRegex(searchTerm.value)}\\s*\\(`, 'gi'), // Constructor calls
+              new RegExp(`import.*${escapeRegex(searchTerm.value)}`, 'gi'), // Import statements
+              new RegExp(`export.*${escapeRegex(searchTerm.value)}`, 'gi'), // Export statements
             ];
 
             // Base n8n patterns
             const basePatterns = [
-              new RegExp(`\\b${escapeRegex(searchTerm)}\\b`, 'gi'),
-              new RegExp(`\\$\\(['"]${escapeRegex(searchTerm)}['"]\\)`, 'gi'),
-              new RegExp(`\\$node\\[['"]${escapeRegex(searchTerm)}['"]\\]`, 'gi'),
-              new RegExp(`\\$json\\.${escapeRegex(searchTerm)}`, 'gi'),
-              new RegExp(`${escapeRegex(searchTerm)}\\.[\\w.\\[\\]]+`, 'gi'),
-              new RegExp(`\\.[\\w.]*${escapeRegex(searchTerm)}[\\w.]*`, 'gi'),
-              new RegExp(`\\$\\(${escapeRegex(searchTerm)}\\)`, 'gi'),
-              new RegExp(`\\{\\{[^}]*${escapeRegex(searchTerm)}[^}]*\\}\\}`, 'gi'),
-              new RegExp(`\\$\\{${escapeRegex(searchTerm)}\\}`, 'gi'),
-              new RegExp(`\\$json\\..*${escapeRegex(searchTerm)}.*`, 'gi'),
-              new RegExp(`\\$items\\[[^\\]]*\\].*${escapeRegex(searchTerm)}.*`, 'gi'),
-              new RegExp(`\\$input.*${escapeRegex(searchTerm)}.*`, 'gi'),
+              new RegExp(`\\b${escapeRegex(searchTerm.value)}\\b`, 'gi'),
+              new RegExp(`\\$\\(['"]${escapeRegex(searchTerm.value)}['"]\\)`, 'gi'),
+              new RegExp(`\\$node\\[['"]${escapeRegex(searchTerm.value)}['"]\\]`, 'gi'),
+              new RegExp(`\\$json\\.${escapeRegex(searchTerm.value)}`, 'gi'),
+              new RegExp(`${escapeRegex(searchTerm.value)}\\.[\\w.\\[\\]]+`, 'gi'),
+              new RegExp(`\\.[\\w.]*${escapeRegex(searchTerm.value)}[\\w.]*`, 'gi'),
+              new RegExp(`\\$\\(${escapeRegex(searchTerm.value)}\\)`, 'gi'),
+              new RegExp(`\\{\\{[^}]*${escapeRegex(searchTerm.value)}[^}]*\\}\\}`, 'gi'),
+              new RegExp(`\\$\\{${escapeRegex(searchTerm.value)}\\}`, 'gi'),
+              new RegExp(`\\$json\\..*${escapeRegex(searchTerm.value)}.*`, 'gi'),
+              new RegExp(`\\$items\\[[^\\]]*\\].*${escapeRegex(searchTerm.value)}.*`, 'gi'),
+              new RegExp(`\\$input.*${escapeRegex(searchTerm.value)}.*`, 'gi'),
             ];
 
             // For code nodes, try JS patterns first for better context, then fallback to base patterns

@@ -37,8 +37,16 @@ npm start
 ```
 
 ## Configuration
-- No .env required by default. All session data is stored in browser storage (localStorage/sessionStorage).
-- To use with your n8n instance, add a session in the app with your n8n API URL and API key.
+- Requires Supabase configuration and server-side encryption key.
+- Create `.env.local` with:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `ENCRYPTION_SECRET_KEY`
+- See `SUPABASE_SETUP.md` for full setup steps.
+
+## Production Notes
+- API routes include basic in-memory rate limiting; scale-out deployments should replace this with a shared store (e.g., Redis).
+- Ensure `ENCRYPTION_SECRET_KEY` is set in the production environment.
 
 ## Technologies Used
 - [Next.js](https://nextjs.org/) 15
