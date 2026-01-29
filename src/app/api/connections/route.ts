@@ -61,11 +61,14 @@ export async function POST(request: Request) {
         : null
 
     if (!name.ok || !baseUrl.ok || !apiKey.ok) {
-      const error = !name.ok
-        ? name.error
-        : !baseUrl.ok
-          ? baseUrl.error
-          : apiKey.error
+      let error = 'Invalid request'
+      if (!name.ok) {
+        error = name.error
+      } else if (!baseUrl.ok) {
+        error = baseUrl.error
+      } else if (!apiKey.ok) {
+        error = apiKey.error
+      }
       return NextResponse.json({ success: false, error }, { status: 400 })
     }
 
