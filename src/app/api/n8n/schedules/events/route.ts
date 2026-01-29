@@ -4,11 +4,14 @@ import { resolveConnection } from '@/src/lib/n8n-connection'
 import { fetchN8n } from '@/src/lib/n8n-client'
 import { requireString } from '@/src/lib/validation'
 import { rateLimit } from '@/src/lib/rate-limit'
-// @ts-expect-error cron-parser has no types in this project
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import parser from 'cron-parser'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const parseExpression =
-  parser.parseExpression || parser.parse || parser.default?.parseExpression
+  (parser as any).parseExpression ||
+  (parser as any).parse ||
+  (parser as any).default?.parseExpression
 
 type WorkflowListItem = {
   id: string
