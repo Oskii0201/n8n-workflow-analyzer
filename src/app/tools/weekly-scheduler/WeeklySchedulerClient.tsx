@@ -50,6 +50,16 @@ function CustomEvent({ event }: { event: CalendarEvent }) {
   )
 }
 
+function formatDurationMs(durationMs: number) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return 'n/a'
+  const totalSeconds = Math.round(durationMs / 1000)
+  if (totalSeconds < 60) return `${totalSeconds}s`
+  const minutes = Math.round(totalSeconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.round(minutes / 60)
+  return `${hours}h`
+}
+
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -332,7 +342,7 @@ export default function WeeklySchedulerClient() {
             view={currentView}
             date={currentDate}
             views={['week', 'day', 'agenda']}
-            step={30}
+            step={10}
             timeslots={1}
             style={{ height: 1600 }}
             onSelectEvent={(event) => {
@@ -429,10 +439,17 @@ export default function WeeklySchedulerClient() {
                   {format(new Date(selectedEvent.end), 'PPpp')}
                 </Badge>
                 <Badge variant="outline">
-                  {selectedEvent.averageDurationMs
-                    ? `Avg ${Math.round(selectedEvent.averageDurationMs / 1000)}s`
-                    : 'Avg n/a'}
+                  Duration{' '}
+                  {formatDurationMs(
+                    new Date(selectedEvent.end).getTime() -
+                      new Date(selectedEvent.start).getTime()
+                  )}
                 </Badge>
+                {selectedEvent.averageDurationMs ? (
+                  <Badge variant="outline">
+                    {`Avg ${Math.round(selectedEvent.averageDurationMs / 1000)}s`}
+                  </Badge>
+                ) : null}
               </div>
             </div>
           )}

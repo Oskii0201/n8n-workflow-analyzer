@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
       body?.timeZone !== undefined
         ? requireString(body.timeZone, 'timeZone', { minLength: 1, trim: true })
         : null
-    const debug = body?.debug === true
     const devBypass =
       process.env.NODE_ENV === 'development' &&
       process.env.N8N_ALLOW_SCHEDULES_DEBUG === 'true'
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
       await buildWorkflowsWithScheduleTriggers(
         workflows.filter((workflow) => workflow.active === true),
         resolved.baseUrl,
-        resolved.apiKey
+        resolved.apiKey,
       )
     const scheduledWorkflows = normalizedWorkflows.filter(
       (workflow) => workflow.scheduleTriggers.length > 0

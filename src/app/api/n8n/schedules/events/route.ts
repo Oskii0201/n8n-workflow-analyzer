@@ -27,6 +27,7 @@ type WorkflowNode = {
   name: string
   type: string
   parameters?: Record<string, unknown>
+  notes?: string
 }
 
 type ScheduleEvent = {
@@ -39,7 +40,7 @@ type ScheduleEvent = {
   averageDurationMs: number | null
 }
 
-const DEFAULT_EVENT_MINUTES = 5
+const DEFAULT_EVENT_SECONDS = 300
 const MAX_EVENTS_PER_WORKFLOW = 500
 const EVENTS_CACHE_TTL_MS = 60_000
 const WORKFLOW_CACHE_TTL_MS = 5 * 60_000
@@ -168,7 +169,11 @@ export async function POST(request: NextRequest) {
               tz,
               MAX_EVENTS_PER_WORKFLOW
             )
-            const durationMs = DEFAULT_EVENT_MINUTES * 60 * 1000
+            const seconds =
+              trigger.durationSeconds && trigger.durationSeconds > 0
+                ? trigger.durationSeconds
+                : DEFAULT_EVENT_SECONDS
+            const durationMs = seconds * 1000
             occurrences.forEach((occurrence, index) => {
               events.push({
                 id: `${workflow.id}:${trigger.id}:${cron}:${index}`,
@@ -218,6 +223,7 @@ type ScheduleTriggerNode = {
   parameters: Record<string, unknown>
   parsedCrons: string[]
   parseErrors: string[]
+  durationSeconds: number | null
 }
 
 async function fetchAllWorkflows(baseUrl: string, apiKey: string): Promise<WorkflowListItem[]> {
@@ -289,6 +295,7 @@ function extractScheduleTriggers(nodes: WorkflowNode[]): ScheduleTriggerNode[] {
     .filter((node) => node.type === 'n8n-nodes-base.scheduleTrigger')
     .map((node) => {
       const { crons, errors } = parseScheduleTrigger(node.parameters || {})
+      const durationSeconds = parseDurationSeconds(node.notes)
       return {
         id: node.id,
         name: node.name,
@@ -296,6 +303,7 @@ function extractScheduleTriggers(nodes: WorkflowNode[]): ScheduleTriggerNode[] {
         parameters: node.parameters || {},
         parsedCrons: crons,
         parseErrors: errors,
+        durationSeconds,
       }
     })
 }
@@ -445,6 +453,15 @@ function getObject(obj: Record<string, unknown> | undefined, key: string) {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined
+}
+
+function parseDurationSeconds(notes?: string) {
+  if (!notes || typeof notes !== 'string') return null
+  const match = notes.match(/duration\s*=\s*(\d+(\.\d+)?)/i)
+  if (!match) return null
+  const value = Number(match[1])
+  if (!Number.isFinite(value) || value <= 0) return null
+  return Math.round(value)
 }
 
 function cleanupCaches() {
