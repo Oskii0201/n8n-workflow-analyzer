@@ -40,3 +40,26 @@ export interface SearchMatch {
   context: string
   matchIndex: number
 }
+
+export interface SubworkflowEdge {
+  callerId: string
+  callerName: string
+  targetId: string
+  targetName: string | null
+  isDynamic: boolean
+  expression?: string
+}
+
+export interface SubworkflowWorkflowMeta {
+  id: string
+  name: string
+  active: boolean
+  updatedAt: string
+}
+
+export interface SubworkflowGraph {
+  edges: SubworkflowEdge[]
+  workflows: Record<string, SubworkflowWorkflowMeta>
+  missingTargets: string[]
+  dynamicRefs: SubworkflowEdge[]
+}

@@ -99,10 +99,9 @@ export async function POST(request: NextRequest) {
 
     const workflows = await fetchAllWorkflows(resolved.baseUrl, resolved.apiKey)
     const { workflows: normalizedWorkflows, unparsedWorkflows } =
-      await buildWorkflowsWithScheduleTriggers(
+      buildWorkflowsWithScheduleTriggers(
         workflows.filter((workflow) => workflow.active === true),
         resolved.baseUrl,
-        resolved.apiKey,
       )
     const scheduledWorkflows = normalizedWorkflows.filter(
       (workflow) => workflow.scheduleTriggers.length > 0
@@ -164,44 +163,15 @@ type ScheduleTriggerNode = {
   parseErrors: string[]
 }
 
-async function fetchWorkflowDetails(
+function buildWorkflowsWithScheduleTriggers(
   workflows: WorkflowListItem[],
   baseUrl: string,
-  apiKey: string
-): Promise<WorkflowListItem[]> {
-  const hydrated: WorkflowListItem[] = []
-
-  for (const workflow of workflows) {
-    const response = await fetchN8n<{ data?: WorkflowListItem } | WorkflowListItem>(
-      `${baseUrl}/api/v1/workflows/${workflow.id}`,
-      apiKey
-    )
-
-    if (!response.ok) {
-      hydrated.push(workflow)
-      continue
-    }
-
-    const data = response.data as { data?: WorkflowListItem }
-    const detailed = data.data ?? (response.data as WorkflowListItem)
-    hydrated.push({ ...workflow, ...detailed })
-  }
-
-  return hydrated
-}
-
-async function buildWorkflowsWithScheduleTriggers(
-  workflows: WorkflowListItem[],
-  baseUrl: string,
-  apiKey: string
-): Promise<{
+): {
   workflows: ScheduledWorkflow[]
   unparsedWorkflows: Array<{ id: string; name: string; url: string; reason: string }>
-}> {
-  const details = await fetchWorkflowDetails(workflows, baseUrl, apiKey)
+} {
   const unparsedWorkflows: Array<{ id: string; name: string; url: string; reason: string }> = []
-  const workflowsWithTriggers = details
-    .filter((workflow) => workflow.isArchived !== true)
+  const workflowsWithTriggers = workflows
     .map((workflow) => {
       const scheduleTriggers = extractScheduleTriggers(workflow.nodes || [])
       const hasUnparsed = scheduleTriggers.some((trigger) => trigger.parsedCrons.length === 0)

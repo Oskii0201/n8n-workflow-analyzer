@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Search, Shield, Zap, BarChart3, Code, Database, ArrowRight, Star } from 'lucide-react';
+import { Search, Shield, Zap, BarChart3, Code, Database, ArrowRight, Star, GitBranch } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card';
 
@@ -94,6 +94,20 @@ export default function HomePage() {
               <CardContent>
                 <CardDescription>
                   Monitor active workflows, track execution status, and analyze performance
+                </CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
+                  <GitBranch className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <CardTitle>Subworkflow Graph</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Visualize executeWorkflow dependencies as an interactive graph across all your workflows
                 </CardDescription>
               </CardContent>
             </Card>

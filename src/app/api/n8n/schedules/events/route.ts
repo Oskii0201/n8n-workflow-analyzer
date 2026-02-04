@@ -43,12 +43,10 @@ type ScheduleEvent = {
 const DEFAULT_EVENT_SECONDS = 300
 const MAX_EVENTS_PER_WORKFLOW = 500
 const EVENTS_CACHE_TTL_MS = 60_000
-const WORKFLOW_CACHE_TTL_MS = 5 * 60_000
 
 type Cached<T> = { value: T; expiresAt: number }
 
 const eventsCache = new Map<string, Cached<ScheduleEvent[]>>()
-const workflowCache = new Map<string, Cached<WorkflowListItem>>()
 let lastCacheCleanup = 0
 
 export async function POST(request: NextRequest) {
@@ -144,16 +142,10 @@ export async function POST(request: NextRequest) {
 
     cleanupCaches()
 
-    const details = await fetchWorkflowDetails(
-      workflows,
-      connectionResolved.baseUrl,
-      connectionResolved.apiKey
-    )
-
     const events: ScheduleEvent[] = []
 
-    details
-      .filter((workflow) => workflow.isArchived !== true && workflow.active === true)
+    workflows
+      .filter((workflow) => workflow.active === true)
       .forEach((workflow) => {
         const triggers = extractScheduleTriggers(workflow.nodes || []).filter(
           (trigger) => trigger.parsedCrons.length > 0
@@ -251,43 +243,6 @@ async function fetchAllWorkflows(baseUrl: string, apiKey: string): Promise<Workf
   }
 
   return allWorkflows
-}
-
-async function fetchWorkflowDetails(
-  workflows: WorkflowListItem[],
-  baseUrl: string,
-  apiKey: string
-): Promise<WorkflowListItem[]> {
-  const hydrated: WorkflowListItem[] = []
-
-  for (const workflow of workflows) {
-    const cacheKey = `${baseUrl}:${apiKey}:${workflow.id}`
-    const cached = workflowCache.get(cacheKey)
-    if (cached && cached.expiresAt > Date.now()) {
-      hydrated.push({ ...workflow, ...cached.value })
-      continue
-    }
-
-    const response = await fetchN8n<{ data?: WorkflowListItem } | WorkflowListItem>(
-      `${baseUrl}/api/v1/workflows/${workflow.id}`,
-      apiKey
-    )
-
-    if (!response.ok) {
-      hydrated.push(workflow)
-      continue
-    }
-
-    const data = response.data as { data?: WorkflowListItem }
-    const detailed = data.data ?? (response.data as WorkflowListItem)
-    workflowCache.set(cacheKey, {
-      value: detailed,
-      expiresAt: Date.now() + WORKFLOW_CACHE_TTL_MS,
-    })
-    hydrated.push({ ...workflow, ...detailed })
-  }
-
-  return hydrated
 }
 
 function extractScheduleTriggers(nodes: WorkflowNode[]): ScheduleTriggerNode[] {
@@ -472,11 +427,6 @@ function cleanupCaches() {
   for (const [key, entry] of eventsCache.entries()) {
     if (entry.expiresAt <= now) {
       eventsCache.delete(key)
-    }
-  }
-  for (const [key, entry] of workflowCache.entries()) {
-    if (entry.expiresAt <= now) {
-      workflowCache.delete(key)
     }
   }
 }

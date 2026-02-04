@@ -28,6 +28,7 @@ const Navbar: React.FC = () => {
         { href: '/dashboard', label: 'Dashboard' },
         { href: '/tools/variable-finder', label: 'Variable Finder' },
         { href: '/tools/weekly-scheduler', label: 'Weekly Scheduler' },
+        { href: '/tools/subworkflow-graph', label: 'Subworkflow Graph' },
         { href: '/connections', label: 'Connections' },
       ]
     : [

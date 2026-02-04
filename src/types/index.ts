@@ -11,6 +11,9 @@ export type {
   NodeData,
   SearchResult,
   SearchMatch,
+  SubworkflowEdge,
+  SubworkflowWorkflowMeta,
+  SubworkflowGraph,
 } from './n8n'
 
 export type { ApiResponse, PaginatedResponse } from './api'
